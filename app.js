@@ -3,9 +3,11 @@ const express = require('express');
 const ejs = require('ejs');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const md5 = require('md5')
 const connectDB = require('./db');
 const app = express();
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+
 
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -30,10 +32,6 @@ const authSchema = new mongoose.Schema({
 
 const Auth = mongoose.model('User', authSchema);
 
-//hashing password
-console.log(md5('raoadeel'));
-
-
 
 const Users = [];
 
@@ -50,48 +48,48 @@ app.get('/Register', (req, res) => {
 
 //@ Post Routs
 app.post('/Register', (req, res) => {
-    const userName = req.body.username;
-    const passWord = md5(req.body.password);
-    const newUser = new Auth({
-        username: userName,
-        password: passWord
-    })
-    newUser.save((err) => {
-        if (!err) {
-            res.render('Secrets');
-        } else {
-            res.render(err)
-        }
+    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+        const userName = req.body.username;
+        const passWord = hash;
+        const newUser = new Auth({
+            username: userName,
+            password: passWord
+        })
+        newUser.save((err) => {
+            if (!err) {
+                res.render('Secrets');
+            } else {
+                res.render(err)
+            }
+        });
+        Users.push(newUser);
     });
-    Users.push(newUser);
-});
 
+
+});
 
 app.post('/Login', (req, res) => {
     const userName = req.body.username;
-    const passWord = md5(req.body.password);
+    const passWord = req.body.password;
     Auth.findOne({ username: userName }, (err, foundUser) => {
         if (err) {
             console.log(err);
 
         } else {
             if (foundUser) {
-                if (foundUser.password === passWord) {
-                    res.render('secrets')
-                }
-                else if (foundUser.password !== passWord) {
-                    res.send('does not exists')
-                }
+                bcrypt.compare(passWord, foundUser.password, function (err, result) {
+                    if (result === true) {
+                        res.render('secrets')
+                    }
+                    else if (result === false) {
+                        res.send('Invalid Cridentials')
+                    }
+                });
+
             }
         }
     })
 })
-
-
-
-
-
-
 
 app.listen(PORT, () => {
     console.log(`server is listenig at port ${PORT}`);
