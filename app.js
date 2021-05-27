@@ -1,15 +1,17 @@
+require('dotenv').config()
 const express = require('express');
 const ejs = require('ejs');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const encrypt = require('mongoose-encryption');
 const connectDB = require('./db');
-const PORT = 3000;
 const app = express();
 
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'))
+
+const PORT = process.env.PORT
 
 //@ Mongodb connection
 require('./db');
@@ -25,7 +27,9 @@ const authSchema = new mongoose.Schema({
         // required: [true]
     }
 })
-const secret = "thisisjusttoaddencryption"
+
+//mongoose-encryption
+const secret = process.env.SECRET
 authSchema.plugin(encrypt, { secret: secret, encryptedFields: ['password'] });
 const Auth = mongoose.model('User', authSchema);
 
