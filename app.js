@@ -3,17 +3,29 @@ const express = require('express');
 const ejs = require('ejs');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const session = require('express-session')
+const passport = require('passport')
+const passportLocalMongoose = require('passport-local-mongoose')
 const connectDB = require('./db');
 const app = express();
-const bcrypt = require('bcrypt');
-const saltRounds = 10;
+
 
 
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'))
-
 const PORT = process.env.PORT
+
+
+///   step no 1 (express-session)
+app.use(session({
+    secret: 'Our little secret cat',
+    resave: false,
+    saveUninitialized: false
+}))
+/// step no 2 (passportjs)
+app.use(passport.initialize());
+app.use(passport.session())
 
 //@ Mongodb connection
 require('./db');
@@ -30,8 +42,22 @@ const authSchema = new mongoose.Schema({
     }
 })
 
-const Auth = mongoose.model('User', authSchema);
 
+/// step no. 3 (passport-local-mongoose)
+authSchema.plugin(passportLocalMongoose);
+
+const Auth = new mongoose.model('User', authSchema);
+
+///step no.4  (passport-local-mongoose)+(stackover flow)
+passport.use(Auth.createStrategy());
+
+passport.serializeUser(function (Auth, done) {
+    done(null, Auth);
+});
+
+passport.deserializeUser(function (Auth, done) {
+    done(null, Auth);
+});
 
 const Users = [];
 
@@ -46,47 +72,56 @@ app.get('/Register', (req, res) => {
     res.render('Register')
 })
 
+/// step no 6 
+app.get('/Secrets', (req, res) => {
+    if (req.isAuthenticated()) {
+        res.render('Secrets')
+    } else {
+        res.redirect('/login')
+    }
+})
+
+/// setep no 7 (logout from passportjs)
+app.get('/logout', (req, res) => {
+    req.logout();
+    res.redirect('/');
+})
+
+
 //@ Post Routs
 app.post('/Register', (req, res) => {
-    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
-        const userName = req.body.username;
-        const passWord = hash;
-        const newUser = new Auth({
-            username: userName,
-            password: passWord
-        })
-        newUser.save((err) => {
-            if (!err) {
-                res.render('Secrets');
-            } else {
-                res.render(err)
-            }
-        });
-        Users.push(newUser);
-    });
 
+    /// step no 5
+
+    Auth.register({ username: req.body.username }, req.body.password, (err, user) => {
+        if (err) {
+            console.log(err)
+            res.redirect('/register')
+        } else {
+            passport.authenticate('local')(req, res, () => {
+                res.redirect('/Secrets')
+            })
+
+        }
+    })
 
 });
 
 app.post('/Login', (req, res) => {
-    const userName = req.body.username;
-    const passWord = req.body.password;
-    Auth.findOne({ username: userName }, (err, foundUser) => {
+    const userName = req.body.unsername;
+    const passWord = req.body.password
+    const newUser = new Auth({
+        username: userName,
+        password: passWord
+    })
+    ///   setup no. 7  (passportjs login())
+    req.login(newUser, (err) => {
         if (err) {
             console.log(err);
-
         } else {
-            if (foundUser) {
-                bcrypt.compare(passWord, foundUser.password, function (err, result) {
-                    if (result === true) {
-                        res.render('secrets')
-                    }
-                    else if (result === false) {
-                        res.send('Invalid Cridentials')
-                    }
-                });
-
-            }
+            passport.authenticate('local')(req, res, () => {
+                res.redirect('/Secrets')
+            })
         }
     })
 })
